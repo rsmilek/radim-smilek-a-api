@@ -39,6 +39,9 @@ ScaffoldingReadMe.txt
 # dotenv environment variables file
 .env
 
+# Azure Functions local settings may contain secrets
+local.settings.json
+
 # Others
 ~$*
 *~
