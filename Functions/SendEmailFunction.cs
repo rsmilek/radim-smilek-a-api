@@ -15,11 +15,18 @@ using RadimSmilekAApi.Models;
 namespace RadimSmilekAApi.Functions;
 
 /// <summary>Sends email through Azure Communication Services.</summary>
-public sealed class SendEmailFunction(EmailClient emailClient, ILogger<SendEmailFunction> logger)
+public sealed class SendEmailFunction(
+    ILogger<SendEmailFunction> logger,
+    EmailClient emailClient)
 {
-    private const string SenderAddress = "rsw@rsw.one";
+    private const string SenderAddress = "DoNotReply@26fe5e8c-a166-4dac-960f-8d38c3267ca4.azurecomm.net";
+    private const string BodyFormatPlainText = "plainText";
+    private const string BodyFormatHtml = "html";
 
-    /// <summary>Validates and submits an email for delivery through ACS.</summary>
+    /// <summary>
+    /// http://localhost:7071/api/send-email
+    /// Validates and submits an email for delivery through ACS - Azure Communication Services.
+    /// </summary>
     /// <param name="request">HTTP request containing the email details.</param>
     /// <param name="cancellationToken">Signals that the invocation was cancelled.</param>
     /// <returns>An accepted response containing the ACS operation identifier.</returns>
@@ -64,25 +71,17 @@ public sealed class SendEmailFunction(EmailClient emailClient, ILogger<SendEmail
 
         var errors = Validate(payload);
         if (errors.Count > 0)
-        {
             return await WriteErrorAsync(request, HttpStatusCode.BadRequest, "Request validation failed.", cancellationToken, errors);
-        }
 
         var content = new EmailContent(payload!.Subject!);
-        if (string.Equals(payload.BodyFormat, "html", StringComparison.OrdinalIgnoreCase))
-        {
+        if (string.Equals(payload.BodyFormat, BodyFormatHtml, StringComparison.OrdinalIgnoreCase))
             content.Html = payload.Body;
-        }
         else
-        {
             content.PlainText = payload.Body;
-        }
 
         var message = new EmailMessage(SenderAddress, payload.To!, content);
         if (!string.IsNullOrWhiteSpace(payload.ReplyTo))
-        {
             message.ReplyTo.Add(new EmailAddress(payload.ReplyTo));
-        }
 
         try
         {
@@ -90,9 +89,7 @@ public sealed class SendEmailFunction(EmailClient emailClient, ILogger<SendEmail
             logger.LogInformation("ACS accepted email operation {OperationId} for recipient {Recipient}.", operation.Id, payload.To);
 
             var response = request.CreateResponse(HttpStatusCode.Accepted);
-            await response.WriteAsJsonAsync(
-                new SendEmailResponse { OperationId = operation.Id, Status = "Accepted" },
-                cancellationToken);
+            await response.WriteAsJsonAsync(new SendEmailResponse { OperationId = operation.Id, Status = "Accepted" }, cancellationToken);
             return response;
         }
         catch (RequestFailedException exception)
@@ -125,40 +122,28 @@ public sealed class SendEmailFunction(EmailClient emailClient, ILogger<SendEmail
         ValidateRequiredEmail(payload.To, "to", errors);
 
         if (string.IsNullOrWhiteSpace(payload.Subject))
-        {
             errors.Add("subject is required.");
-        }
 
         if (string.IsNullOrWhiteSpace(payload.Body))
-        {
             errors.Add("body is required.");
-        }
 
         if (!string.IsNullOrWhiteSpace(payload.ReplyTo) && !MailAddress.TryCreate(payload.ReplyTo, out _))
-        {
             errors.Add("replyTo must be a valid email address.");
-        }
 
         if (!string.IsNullOrWhiteSpace(payload.BodyFormat) &&
-            !string.Equals(payload.BodyFormat, "plainText", StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(payload.BodyFormat, "html", StringComparison.OrdinalIgnoreCase))
-        {
-            errors.Add("bodyFormat must be plainText or html.");
-        }
+            !string.Equals(payload.BodyFormat, BodyFormatPlainText, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(payload.BodyFormat, BodyFormatHtml, StringComparison.OrdinalIgnoreCase))
+            errors.Add($"bodyFormat must be {BodyFormatPlainText} or {BodyFormatHtml}.");
 
         return errors;
     }
 
-    private static void ValidateRequiredEmail(string? address, string fieldName, ICollection<string> errors)
+    private static void ValidateRequiredEmail(string? address, string fieldName, List<string> errors)
     {
         if (string.IsNullOrWhiteSpace(address))
-        {
             errors.Add($"{fieldName} is required.");
-        }
         else if (!MailAddress.TryCreate(address, out _))
-        {
             errors.Add($"{fieldName} must be a valid email address.");
-        }
     }
 
     private static async Task<HttpResponseData> WriteErrorAsync(
