@@ -10,6 +10,7 @@ using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Attributes;
 using Microsoft.Azure.WebJobs.Extensions.OpenApi.Core.Enums;
 using Microsoft.Extensions.Logging;
 using Microsoft.OpenApi.Models;
+using RadimSmilekAApi.Helpers;
 using RadimSmilekAApi.Models;
 
 namespace RadimSmilekAApi.Functions;
@@ -47,10 +48,10 @@ public sealed class SendEmailFunction(
         typeof(SendEmailRequest),
         Required = true,
         Description = "Recipient, subject, body, optional reply-to address, and body format.")]
-    [OpenApiResponseWithBody(HttpStatusCode.Accepted, "application/json", typeof(SendEmailResponse), Description = "ACS accepted the send operation.")]
-    [OpenApiResponseWithBody(HttpStatusCode.BadRequest, "application/json", typeof(ApiErrorResponse), Description = "The request is malformed or invalid.")]
-    [OpenApiResponseWithBody(HttpStatusCode.BadGateway, "application/json", typeof(ApiErrorResponse), Description = "ACS rejected or failed the request.")]
-    [OpenApiResponseWithBody(HttpStatusCode.InternalServerError, "application/json", typeof(ApiErrorResponse), Description = "Authentication or an unexpected error prevented submission.")]
+    [OpenApiResponseWithBody(HttpStatusCode.Accepted, "application/json", typeof(ApiResponse<string>), Description = "ACS accepted the send operation.")]
+    [OpenApiResponseWithBody(HttpStatusCode.BadRequest, "application/json", typeof(ApiResponse<object>), Description = "The request is malformed or invalid.")]
+    [OpenApiResponseWithBody(HttpStatusCode.BadGateway, "application/json", typeof(ApiResponse<object>), Description = "ACS rejected or failed the request.")]
+    [OpenApiResponseWithBody(HttpStatusCode.InternalServerError, "application/json", typeof(ApiResponse<object>), Description = "Authentication or an unexpected error prevented submission.")]
     public async Task<HttpResponseData> RunAsync(
         [HttpTrigger(AuthorizationLevel.Function, "post", Route = "send-email")] HttpRequestData request,
         CancellationToken cancellationToken)
@@ -59,19 +60,16 @@ public sealed class SendEmailFunction(
 
         try
         {
-            payload = await JsonSerializer.DeserializeAsync<SendEmailRequest>(
-                request.Body,
-                new JsonSerializerOptions(JsonSerializerDefaults.Web),
-                cancellationToken);
+            payload = await JsonSerializer.DeserializeAsync<SendEmailRequest>(request.Body, _serializeOptions, cancellationToken);
         }
         catch (JsonException)
         {
-            return await WriteErrorAsync(request, HttpStatusCode.BadRequest, "Request body must be valid JSON.", cancellationToken);
+            return await ApiResponseWriter.WriteErrorAsync(request, HttpStatusCode.BadRequest, "Request body must be valid JSON.", cancellationToken);
         }
 
         var errors = Validate(payload);
         if (errors.Count > 0)
-            return await WriteErrorAsync(request, HttpStatusCode.BadRequest, "Request validation failed.", cancellationToken, errors);
+            return await ApiResponseWriter.WriteErrorAsync(request, HttpStatusCode.BadRequest, "Request validation failed.", cancellationToken, errors);
 
         var content = new EmailContent(payload!.Subject!);
         if (string.Equals(payload.BodyFormat, BodyFormatHtml, StringComparison.OrdinalIgnoreCase))
@@ -87,27 +85,27 @@ public sealed class SendEmailFunction(
         {
             var operation = await emailClient.SendAsync(WaitUntil.Started, message, cancellationToken);
             logger.LogInformation("ACS accepted email operation {OperationId} for recipient {Recipient}.", operation.Id, payload.To);
-
-            var response = request.CreateResponse(HttpStatusCode.Accepted);
-            await response.WriteAsJsonAsync(new SendEmailResponse { OperationId = operation.Id, Status = "Accepted" }, cancellationToken);
-            return response;
+            return await ApiResponseWriter.WriteSuccessAsync(request, HttpStatusCode.Accepted, $"ACS accepted email operation for recipient {payload.To}.",
+                operation.Id, cancellationToken);
         }
         catch (RequestFailedException exception)
         {
             logger.LogError(exception, "ACS failed to accept an email for recipient {Recipient}.", payload.To);
-            return await WriteErrorAsync(request, HttpStatusCode.BadGateway, "The email provider could not accept the request.", cancellationToken);
+            return await ApiResponseWriter.WriteErrorAsync(request, HttpStatusCode.BadGateway, "The email provider could not accept the request.", cancellationToken);
         }
         catch (AuthenticationFailedException exception)
         {
             logger.LogError(exception, "ACS authentication failed.");
-            return await WriteErrorAsync(request, HttpStatusCode.InternalServerError, "Email service authentication failed.", cancellationToken);
+            return await ApiResponseWriter.WriteErrorAsync(request, HttpStatusCode.InternalServerError, "Email service authentication failed.", cancellationToken);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
             logger.LogError(exception, "Unexpected error while submitting an email.");
-            return await WriteErrorAsync(request, HttpStatusCode.InternalServerError, "An unexpected error prevented email submission.", cancellationToken);
+            return await ApiResponseWriter.WriteErrorAsync(request, HttpStatusCode.InternalServerError, "An unexpected error prevented email submission.", cancellationToken);
         }
     }
+
+    private static readonly JsonSerializerOptions _serializeOptions = new(JsonSerializerDefaults.Web);
 
     private static List<string> Validate(SendEmailRequest? payload)
     {
@@ -122,18 +120,18 @@ public sealed class SendEmailFunction(
         ValidateRequiredEmail(payload.To, "to", errors);
 
         if (string.IsNullOrWhiteSpace(payload.Subject))
-            errors.Add("subject is required.");
+            errors.Add("Subject is required.");
 
         if (string.IsNullOrWhiteSpace(payload.Body))
-            errors.Add("body is required.");
+            errors.Add("Body is required.");
 
         if (!string.IsNullOrWhiteSpace(payload.ReplyTo) && !MailAddress.TryCreate(payload.ReplyTo, out _))
-            errors.Add("replyTo must be a valid email address.");
+            errors.Add("ReplyTo must be a valid email address.");
 
         if (!string.IsNullOrWhiteSpace(payload.BodyFormat) &&
             !string.Equals(payload.BodyFormat, BodyFormatPlainText, StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(payload.BodyFormat, BodyFormatHtml, StringComparison.OrdinalIgnoreCase))
-            errors.Add($"bodyFormat must be {BodyFormatPlainText} or {BodyFormatHtml}.");
+            errors.Add($"BodyFormat must be {BodyFormatPlainText} or {BodyFormatHtml}.");
 
         return errors;
     }
@@ -146,15 +144,4 @@ public sealed class SendEmailFunction(
             errors.Add($"{fieldName} must be a valid email address.");
     }
 
-    private static async Task<HttpResponseData> WriteErrorAsync(
-        HttpRequestData request,
-        HttpStatusCode statusCode,
-        string message,
-        CancellationToken cancellationToken,
-        IReadOnlyList<string>? errors = null)
-    {
-        var response = request.CreateResponse(statusCode);
-        await response.WriteAsJsonAsync(new ApiErrorResponse { Message = message, Errors = errors }, cancellationToken);
-        return response;
-    }
 }
