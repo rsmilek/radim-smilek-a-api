@@ -37,6 +37,7 @@ public sealed class SendEmailFunction(
         tags: ["Email"],
         Summary = "Send an email",
         Description = "Submits an email from rsw@rsw.one through Azure Communication Services.")]
+    //[OpenApiSecurity("function_key", SecuritySchemeType.ApiKey, Name = "code", In = OpenApiSecurityLocationType.Query)]
     [OpenApiSecurity(
         "function_key",
         SecuritySchemeType.ApiKey,
@@ -53,7 +54,7 @@ public sealed class SendEmailFunction(
     [OpenApiResponseWithBody(HttpStatusCode.BadGateway, "application/json", typeof(ApiResponse<object>), Description = "ACS rejected or failed the request.")]
     [OpenApiResponseWithBody(HttpStatusCode.InternalServerError, "application/json", typeof(ApiResponse<object>), Description = "Authentication or an unexpected error prevented submission.")]
     public async Task<HttpResponseData> RunAsync(
-        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "send-email")] HttpRequestData request,
+        [HttpTrigger(AuthorizationLevel.Function, "post", Route = "sendemail")] HttpRequestData request,
         CancellationToken cancellationToken)
     {
         SendEmailRequest? payload;
