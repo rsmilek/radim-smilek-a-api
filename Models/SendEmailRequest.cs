@@ -7,19 +7,16 @@ namespace RadimSmilekAApi.Models;
 public sealed class SendEmailRequest
 {
     /// <summary>Recipient email address.</summary>
-    [Required]
     [OpenApiProperty(Nullable = false, Default = "rsw@rsw.one", Description = "Enter Email address")]
-    public string? To { get; init; }
+    public required string To { get; init; }
 
     /// <summary>Email subject.</summary>
-    [Required]
     [OpenApiProperty(Nullable = false, Default = "Subject", Description = "Enter Email subject")]
-    public string? Subject { get; init; }
+    public required string Subject { get; init; }
 
     /// <summary>Plain-text or HTML email content.</summary>
-    [Required]
     [OpenApiProperty(Nullable = true, Default = "Message", Description = "Enter Email message")]
-    public string? Body { get; init; }
+    public required string Body { get; init; }
 
     /// <summary>Optional address that receives replies.</summary>
     [OpenApiProperty(Nullable = false, Default = "rsw@rsw.one", Description = "Enter Reply-To email address")]
