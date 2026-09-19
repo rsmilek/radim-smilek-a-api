@@ -14,14 +14,14 @@ The official `Microsoft.Azure.Functions.Worker.Extensions.OpenApi` package is us
 
 ### Endpoint
 
-`POST /api/send-email`
+`POST /api/sendemail`
 
 The endpoint uses `AuthorizationLevel.Function`. Supply a function key through the `x-functions-key` header or the `code` query parameter.
 
 Example request:
 
 ```http
-POST /api/send-email HTTP/1.1
+POST /api/sendemail HTTP/1.1
 Host: localhost:7071
 Content-Type: application/json
 x-functions-key: <function-key>
