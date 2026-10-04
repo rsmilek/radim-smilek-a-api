@@ -56,6 +56,7 @@ Acceptance means ACS started the send operation. It does not guarantee final del
 | `ACS_CONNECTION_STRING` | Local fallback only | When nonempty, this takes precedence over `ACS_ENDPOINT`. Do not set it in Azure when managed identity is used. |
 | `FUNCTIONS_WORKER_RUNTIME` | Yes | Must be `dotnet-isolated`. |
 | `AzureWebJobsStorage` | Yes | Function host storage connection. |
+| `Host.CORS` | Local development | Allowed browser origins for the local Functions host. The checked-in local configuration uses `*` to allow all origins during development; do not use this wildcard in production. |
 
 The checked-in example is [`local.settings.json`](local.settings.json). Git ignores this file because it can contain credentials.
 
@@ -79,6 +80,33 @@ az login
 The signed-in identity needs permission to send email through the ACS resource.
 
 For connection-string authentication, put a development ACS connection string in `ACS_CONNECTION_STRING`. Never commit that value.
+
+### CORS for a frontend
+
+CORS must allow the origin from which the browser loads the frontend, or the browser will block calls to this API. For local development, `local.settings.json` sets `Host.CORS` to `*`, allowing requests from any origin. This is for development convenience only.
+```json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated"
+  },
+  "Host": {
+    "CORS": "*"
+  }
+}
+```
+
+In Azure, configure CORS on the Function App separately; local settings are not deployed. In the Azure portal, open the Function App, go to **API > CORS**, add the frontend's exact origin (for example, `https://www.example.com`), and save. Do not include a path or trailing slash. For multiple frontends, add each origin explicitly and avoid `*` in production. You can also configure an origin with Azure CLI:
+
+```powershell
+az functionapp cors add `
+  --resource-group $resourceGroup `
+  --name $functionApp `
+  --allowed-origins https://www.example.com
+```
+
+CORS only controls which browser origins may make cross-origin requests; it does not replace the endpoint's function-key authentication.
 
 ### Run locally
 
