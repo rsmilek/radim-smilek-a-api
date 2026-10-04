@@ -86,7 +86,7 @@ public sealed class SendEmailFunction(
         {
             var operation = await emailClient.SendAsync(WaitUntil.Started, message, cancellationToken);
             logger.LogInformation("ACS accepted email operation {OperationId} for recipient {Recipient}.", operation.Id, payload.To);
-            return await ApiResponseWriter.WriteSuccessAsync(request, HttpStatusCode.Accepted, $"ACS accepted email operation for recipient {payload.To}.",
+            return await ApiResponseWriter.WriteSuccessAsync(request, HttpStatusCode.Accepted, $"Email message sent successfully.",
                 operation.Id, cancellationToken);
         }
         catch (RequestFailedException exception)
